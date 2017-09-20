@@ -19,6 +19,12 @@ struct Processor {
         case equals
     }
     
+    mutating func clear() {
+        accumulator = nil
+        pending = nil
+        description = nil
+    }
+    
     private var operations: Dictionary<String,Ops> = [
         "π" : Ops.constant(Double.pi),
         "e" : Ops.constant(M_E),
@@ -34,21 +40,20 @@ struct Processor {
     
     private var pending: pendingBinOp?
     
-    private var resultIsPending: Bool {
+    var resultIsPending: Bool {
         get {
             return pending != nil
         }
     }
     
-    private var accumulatorString: String?
-    private var description = ""
+    var description: String?
     
     private struct pendingBinOp {
-        let f: (Double, Double) -> Double
-        let fistOp: Double
+        let function: (Double, Double) -> Double
+        let firstOp: Double
         
         func perform(with secondOp: Double) -> Double {
-            return f(fistOp, secondOp)
+            return function(firstOp, secondOp)
         }
     }
     
@@ -57,27 +62,32 @@ struct Processor {
             switch operation {
             case .constant(let value):
                 accumulator = value
-                accumulatorString = String(value)
+                pending = nil
+                description = String(value)
+                print(description ?? "")
             case .unaryOperation(let f):
                 if accumulator != nil {
+                    description = "\(symbol) (\(accumulator!))"
                     accumulator = f(accumulator!)
-                    
+                    print(description ?? "")
                 }
-                description = "\(symbol)(\(accumulator!))"
             case .binaryOperation(let f):
                 if accumulator != nil {
-                    pending = pendingBinOp(f: f, fistOp: accumulator!)
-                    description = "\(accumulator!) \(f)"
+                    pending = pendingBinOp(function: f, firstOp: accumulator!)
+                    description = "\(accumulator!) \(symbol) "
                     accumulator = nil
                 }
             case .equals:
                 performPendingBinOp()
+                print(description ?? "")
+                pending = nil
             }
         }
     }
     
     mutating private func performPendingBinOp() {
         if pending != nil && accumulator != nil {
+            description! += String(accumulator!)
             accumulator = pending!.perform(with: accumulator!)
             pending = nil
         }
@@ -91,5 +101,36 @@ struct Processor {
         get {
             return accumulator
         }
+    }
+    
+    func computePrevText(_ UIprevText: inout String, _ symbol: String, _ lastDigit: inout String) -> String {
+        if let operation = operations[symbol]{
+            switch operation {
+            case .constant(_):
+                let res = UIprevText
+                UIprevText = ""
+                return res + " " + symbol
+            case .unaryOperation(_):
+                let temp = lastDigit
+                lastDigit = ""
+                if resultIsPending {
+                    return UIprevText + " " + symbol + "(" + temp + ")"
+                } else {
+                    return symbol + "(" + UIprevText + ")"
+                }
+            case .binaryOperation(_):
+                if (UIprevText == "") {
+                    UIprevText = lastDigit
+                }
+                return UIprevText + " " + symbol
+            case .equals:
+                if lastDigit != "" {
+                    UIprevText += " " + lastDigit
+                }
+                lastDigit = ""
+                return UIprevText
+            }
+        }
+        return ""
     }
 }

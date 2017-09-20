@@ -11,7 +11,22 @@ import UIKit
 class ViewController: UIViewController {
     @IBOutlet weak var display: UILabel!
     
-    var userTyping = false
+    @IBOutlet weak var previousOps: UILabel!
+    
+    private var userTyping = false
+    
+    private var previousText = ""
+    
+    private var lastDigit = ""
+    
+    @IBAction func clear(_ sender: UIButton) {
+        previousText = ""
+        lastDigit = ""
+        userTyping = false
+        display!.text = "0"
+        previousOps!.text = " "
+        processor.clear()
+    }
     
     @IBAction func touchDigit(_ sender: UIButton) {
         let digit = sender.currentTitle!
@@ -24,6 +39,14 @@ class ViewController: UIViewController {
             display.text = digit
             userTyping = true
         }
+        lastDigit = digit
+        
+        if !processor.resultIsPending && !userTyping {
+            previousOps!.text = lastDigit
+        } else if userTyping && !processor.resultIsPending {
+            previousText = ""
+        }
+        
     }
     
     var displayValue: Double {
@@ -44,6 +67,12 @@ class ViewController: UIViewController {
         }
         if let mathSymbol = sender.currentTitle {
             processor.performOperations(mathSymbol)
+            previousText = processor.computePrevText(&previousText, mathSymbol, &lastDigit)
+            if processor.resultIsPending {
+                previousOps!.text = previousText + " ..."
+            } else {
+                previousOps!.text = previousText + " = "
+            }
         }
         if let result = processor.result {
             displayValue = result
