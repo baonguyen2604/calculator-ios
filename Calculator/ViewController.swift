@@ -13,19 +13,30 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var previousOps: UILabel!
     
+    @IBOutlet weak var M_Display: UILabel!
+    
     private var userTyping = false
     
-    private var previousText = ""
+    private var mDict: Dictionary<String, Double>?
     
-    private var lastDigit = ""
-    
-    @IBAction func clear(_ sender: UIButton) {
-        previousText = ""
-        lastDigit = ""
+    @IBAction func setM(_ sender: UIButton) {
+        if let value = Double (display!.text!) {
+            mDict = [
+                "M": value
+            ]
+        }
+        if let result = processor.evaluate(using: mDict).result {
+            displayValue = result
+        }
+        M_Display!.text = "M =  \(mDict!["M"] ?? 0)"
         userTyping = false
-        display!.text = "0"
-        previousOps!.text = " "
-        processor.clear()
+    }
+
+    @IBAction func getM(_ sender: UIButton) {
+        processor.setOperand(variable: "M")
+        if let result = processor.evaluate(using: mDict).result {
+            displayValue = result
+        }
     }
     
     @IBAction func touchDigit(_ sender: UIButton) {
@@ -38,13 +49,6 @@ class ViewController: UIViewController {
         } else {
             display.text = digit
             userTyping = true
-        }
-        lastDigit = digit
-        
-        if !processor.resultIsPending && !userTyping {
-            previousOps!.text = lastDigit
-        } else if userTyping && !processor.resultIsPending {
-            previousText = ""
         }
         
     }
@@ -60,6 +64,25 @@ class ViewController: UIViewController {
     
     private var processor = Processor()
 
+    @IBAction func clear(_ sender: UIButton) {
+        userTyping = false
+        display!.text = "0"
+        previousOps!.text = " "
+        M_Display!.text = " "
+        mDict?.removeAll()
+        processor.clear()
+    }
+    
+    @IBAction func undo(_ sender: UIButton) {
+        if userTyping {
+            var cur = display!.text
+            cur?.removeLast(1)
+            display!.text = cur
+        } else {
+            processor.undo()
+        }
+    }
+    
     @IBAction func performOperation(_ sender: UIButton) {
         if userTyping {
             processor.setOperand(displayValue)
@@ -67,17 +90,16 @@ class ViewController: UIViewController {
         }
         if let mathSymbol = sender.currentTitle {
             processor.performOperations(mathSymbol)
-            previousText = processor.computePrevText(&previousText, mathSymbol, &lastDigit)
-            if processor.resultIsPending {
-                previousOps!.text = previousText + " ..."
-            } else {
-                previousOps!.text = previousText + " = "
-            }
         }
-        if let result = processor.result {
+        if let result = processor.evaluate().result {
             displayValue = result
         }
+        
+        if (processor.evaluate().isPending) {
+            previousOps!.text = processor.evaluate().description + "..."
+        } else {
+            previousOps!.text = processor.evaluate().description + " = "
+        }
     }
-    
 }
 

@@ -10,127 +10,148 @@ import Foundation
 
 struct Processor {
     
-    private var accumulator: Double?
+    var resultIsPending: Bool {
+        return evaluate().isPending
+    }
+    
+    var result: Double? {
+        return evaluate().result
+    }
+    
+    var description: String? {
+        return evaluate().description
+    }
     
     private enum Ops {
         case constant(Double)
-        case unaryOperation((Double) -> Double)
-        case binaryOperation((Double, Double) -> Double)
+        case unaryOperation((Double) -> Double, (String) ->String)
+        case binaryOperation((Double, Double) -> Double, (String, String) -> String)
         case equals
     }
     
-    mutating func clear() {
-        accumulator = nil
-        pending = nil
-        description = nil
+    private enum Input {
+        case operand(Double)
+        case operation(String)
+        case variable(String)
     }
+    
+    private var stack = [Input]()
     
     private var operations: Dictionary<String,Ops> = [
         "π" : Ops.constant(Double.pi),
         "e" : Ops.constant(M_E),
-        "√" : Ops.unaryOperation(sqrt),
-        "cos" : Ops.unaryOperation(cos),
-        "±" : Ops.unaryOperation({ -$0 } ),
-        "x" : Ops.binaryOperation(*),
-        "÷" : Ops.binaryOperation(/),
-        "+" : Ops.binaryOperation(+),
-        "−" : Ops.binaryOperation(-),
+        
+        "√" : Ops.unaryOperation(sqrt, { "√(" + $0 + ")" }),
+        "cos" : Ops.unaryOperation(cos, { "cos(" + $0 + ")" }),
+        "sin" : Ops.unaryOperation(sin, { "sin(" + $0 + ")" }),
+        "tan" : Ops.unaryOperation(tan, { "tan(" + $0 + ")" }),
+        "ln" : Ops.unaryOperation(log, { "ln(" + $0 + ")"}),
+        "±" : Ops.unaryOperation({ -$0 }, { "-(" + $0 + ")" }),
+        
+        "x" : Ops.binaryOperation(*, {$0 + " x " + $1}),
+        "÷" : Ops.binaryOperation(/, {$0 + " ÷ " + $1}),
+        "+" : Ops.binaryOperation(+, {$0 + " + " + $1}),
+        "−" : Ops.binaryOperation(-, {$0 + " - " + $1}),
+        
         "=" : Ops.equals
     ]
     
-    private var pending: pendingBinOp?
-    
-    var resultIsPending: Bool {
-        get {
-            return pending != nil
-        }
-    }
-    
-    var description: String?
-    
-    private struct pendingBinOp {
-        let function: (Double, Double) -> Double
-        let firstOp: Double
-        
-        func perform(with secondOp: Double) -> Double {
-            return function(firstOp, secondOp)
-        }
-    }
-    
     mutating func performOperations(_ symbol: String) {
-        if let operation = operations[symbol] {
-            switch operation {
-            case .constant(let value):
-                accumulator = value
-                pending = nil
-                description = String(value)
-                print(description ?? "")
-            case .unaryOperation(let f):
-                if accumulator != nil {
-                    description = "\(symbol) (\(accumulator!))"
-                    accumulator = f(accumulator!)
-                    print(description ?? "")
-                }
-            case .binaryOperation(let f):
-                if accumulator != nil {
-                    pending = pendingBinOp(function: f, firstOp: accumulator!)
-                    description = "\(accumulator!) \(symbol) "
-                    accumulator = nil
-                }
-            case .equals:
-                performPendingBinOp()
-                print(description ?? "")
-                pending = nil
-            }
-        }
-    }
-    
-    mutating private func performPendingBinOp() {
-        if pending != nil && accumulator != nil {
-            description! += String(accumulator!)
-            accumulator = pending!.perform(with: accumulator!)
-            pending = nil
-        }
+        stack.append(Input.operation(symbol))
     }
     
     mutating func setOperand(_ operand: Double) {
-        accumulator = operand
+        stack.append(Input.operand(operand))
     }
     
-    var result: Double? {
-        get {
-            return accumulator
+    mutating func setOperand(variable named:String) {
+        stack.append(Input.variable(named))
+    }
+    
+    mutating func clear() {
+        stack.removeAll()
+    }
+    
+    mutating func undo() {
+        if (!stack.isEmpty) {
+            stack.removeLast()
         }
     }
     
-    func computePrevText(_ UIprevText: inout String, _ symbol: String, _ lastDigit: inout String) -> String {
-        if let operation = operations[symbol]{
-            switch operation {
-            case .constant(_):
-                let res = UIprevText
-                UIprevText = ""
-                return res + " " + symbol
-            case .unaryOperation(_):
-                let temp = lastDigit
-                lastDigit = ""
-                if resultIsPending {
-                    return UIprevText + " " + symbol + "(" + temp + ")"
-                } else {
-                    return symbol + "(" + UIprevText + ")"
-                }
-            case .binaryOperation(_):
-                if (UIprevText == "") {
-                    UIprevText = lastDigit
-                }
-                return UIprevText + " " + symbol
-            case .equals:
-                if lastDigit != "" {
-                    UIprevText += " " + lastDigit
-                }
-                lastDigit = ""
-                return UIprevText
+    func evaluate(using variables: Dictionary<String, Double>? = nil) -> (result: Double?, isPending: Bool, description: String) {
+        
+        var accumulator: (Double, String)?
+        
+        struct pendingBinOp {
+            let function: (Double, Double) -> Double
+            let description: (String, String) -> String
+            let firstOp: (Double, String)
+            
+            func perform(with secondOp: (Double, String)) -> (Double, String) {
+                return (function(firstOp.0, secondOp.0), description(firstOp.1, secondOp.1))
             }
         }
-        return ""
+        
+        var pending: pendingBinOp?
+        
+        func performPendingBinOp() {
+            if pending != nil && accumulator != nil {
+                accumulator = pending!.perform(with: accumulator!)
+                pending = nil
+            }
+        }
+        
+        var result: Double? {
+            if accumulator != nil {
+                return accumulator!.0
+            }
+            return nil
+        }
+        
+        var description: String? {
+            if pending != nil {
+                return pending!.description((pending?.firstOp.1)!, accumulator?.1 ?? "")
+            }
+            return accumulator?.1
+        }
+        
+        for element in stack {
+            switch element {
+            case .operand(let value):
+                accumulator = (value, "\(value)")
+            case .operation(let symbol):
+                if let operation = operations[symbol] {
+                    switch operation {
+                    case .constant(let value):
+                        accumulator = (value, symbol)
+                        performPendingBinOp()
+                    case .unaryOperation(let f, let description):
+                        if accumulator != nil {
+                            accumulator = (f(accumulator!.0), description(accumulator!.1))
+                        }
+                    case .binaryOperation(let f, let description):
+                        if (pending != nil) {
+                            performPendingBinOp()
+                        }
+                        if accumulator != nil {
+                            pending = pendingBinOp(function: f, description: description, firstOp: accumulator!)
+                            accumulator = nil
+                        }
+                    case .equals:
+                        performPendingBinOp()
+                        pending = nil
+                    }
+                }
+            case .variable(let variableName):
+                if let value = variables?[variableName] {
+                    accumulator = (value, variableName)
+                } else {
+                    accumulator = (0, variableName)
+                }
+            }
+        }
+        
+        return (result, pending != nil, description ?? "")
+        
     }
 }
