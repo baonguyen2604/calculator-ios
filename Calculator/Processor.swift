@@ -46,6 +46,7 @@ struct Processor {
         "sin" : Ops.unaryOperation(sin, { "sin(" + $0 + ")" }),
         "tan" : Ops.unaryOperation(tan, { "tan(" + $0 + ")" }),
         "ln" : Ops.unaryOperation(log, { "ln(" + $0 + ")"}),
+        "e^" : Ops.unaryOperation({pow(M_E, $0)}, { "e^(" + $0 + ")" }),
         "±" : Ops.unaryOperation({ -$0 }, { "-(" + $0 + ")" }),
         
         "x" : Ops.binaryOperation(*, {$0 + " x " + $1}),
