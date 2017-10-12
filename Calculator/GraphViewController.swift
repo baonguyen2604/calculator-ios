@@ -19,9 +19,7 @@ class GraphViewController: UIViewController, DataSource
     
     var function: ((_ x: Double) -> Double?)?
 
-    // private section
-    private let graphModel = GraphModel()
-    
+    // private section    
     @IBOutlet weak var graphView: GraphView! {
         didSet {
             // delegate for DataSource protocol
